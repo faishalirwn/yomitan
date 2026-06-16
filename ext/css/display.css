@@ -1923,6 +1923,9 @@ button.footer-notification-close-button {
     flex-flow: column nowrap;
     row-gap: 0.5em;
 }
+.anki-note-preview-note[hidden] {
+    display: none;
+}
 .anki-note-preview-field {
     display: flex;
     flex-flow: column nowrap;
