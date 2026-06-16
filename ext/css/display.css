@@ -1881,6 +1881,63 @@ button.footer-notification-close-button {
 }
 
 
+/* Anki note preview */
+.footer-notification:has(.anki-note-preview) {
+    max-height: 60vh;
+}
+.anki-note-preview {
+    display: flex;
+    flex-flow: column nowrap;
+    row-gap: 0.75em;
+    white-space: normal;
+}
+.anki-note-preview-note {
+    display: flex;
+    flex-flow: column nowrap;
+    row-gap: 0.5em;
+}
+.anki-note-preview-note:not(:last-child) {
+    padding-bottom: 0.75em;
+    border-bottom: var(--thin-border-size) solid var(--medium-border-color);
+}
+.anki-note-preview-field {
+    display: flex;
+    flex-flow: column nowrap;
+    row-gap: 0.125em;
+}
+.anki-note-preview-field-name {
+    font-size: 0.85em;
+    font-weight: bold;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.anki-note-preview-field-value {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+.anki-note-preview-image {
+    max-width: 100%;
+    max-height: 40vh;
+    height: auto;
+    border-radius: 0.25em;
+}
+.anki-note-preview-audio {
+    display: block;
+    max-width: 100%;
+    margin: 0.25em 0;
+    height: 2em;
+}
+.anki-note-preview-missing-media {
+    font-style: italic;
+    opacity: 0.6;
+}
+.anki-note-preview-empty {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+
 /* Overlays */
 .overlay-panel-container {
     pointer-events: none;

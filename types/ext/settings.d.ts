@@ -313,6 +313,7 @@ export type AnkiOptions = {
     displayTagsAndFlags: AnkiDisplayTagsAndFlags;
     targetTags: string[];
     noteGuiMode: AnkiNoteGuiMode;
+    viewNoteButtonAction: AnkiViewNoteButtonAction;
     apiKey: string;
     downloadTimeout: number;
     forceSync: boolean;
@@ -445,6 +446,8 @@ export type AnkiDuplicateBehavior = 'prevent' | 'overwrite' | 'new';
 export type AnkiDisplayTagsAndFlags = 'never' | 'always' | 'non-standard' | 'custom';
 
 export type AnkiNoteGuiMode = 'browse' | 'edit';
+
+export type AnkiViewNoteButtonAction = 'anki-window' | 'browser-preview';
 
 export type SentenceTerminationCharacterMode = 'custom' | 'custom-no-newlines' | 'newlines' | 'none';
 

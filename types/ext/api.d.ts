@@ -117,6 +117,11 @@ export type GetMediaDetailsTarget = {
     dictionary: string;
 };
 
+export type AnkiNoteMediaFile = {
+    fileName: string;
+    content: string | null;
+};
+
 export type GetTermFrequenciesDetailsTermReadingListItem = {
     term: string;
     reading: string | null;
@@ -218,6 +223,12 @@ type ApiSurface = {
             allowFallback: boolean;
         };
         return: Settings.AnkiNoteGuiMode;
+    };
+    getAnkiNoteMedia: {
+        params: {
+            fileNames: string[];
+        };
+        return: AnkiNoteMediaFile[];
     };
     suspendAnkiCardsForNote: {
         params: {

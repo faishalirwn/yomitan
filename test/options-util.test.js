@@ -547,6 +547,7 @@ function createProfileOptionsUpdatedTestData1() {
             fieldTemplates: null,
             suspendNewCards: false,
             noteGuiMode: 'browse',
+            viewNoteButtonAction: 'anki-window',
             apiKey: '',
             downloadTimeout: 0,
             forceSync: false,
@@ -707,7 +708,7 @@ function createOptionsUpdatedTestData1() {
             },
         ],
         profileCurrent: 0,
-        version: 77,
+        version: 78,
         global: {
             database: {
                 prefixWildcardsSupported: false,

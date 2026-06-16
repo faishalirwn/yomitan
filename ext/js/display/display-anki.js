@@ -88,6 +88,12 @@ export class DisplayAnki {
         this._scanLength = 10;
         /** @type {import('settings').AnkiNoteGuiMode} */
         this._noteGuiMode = 'browse';
+        /** @type {import('settings').AnkiViewNoteButtonAction} */
+        this._viewNoteButtonAction = 'anki-window';
+        /** @type {?import('./display-notification.js').DisplayNotification} */
+        this._notePreviewNotification = null;
+        /** @type {string[]} */
+        this._notePreviewObjectUrls = [];
         /** @type {?number} */
         this._audioDownloadIdleTimeout = null;
         /** @type {string[]} */
@@ -212,6 +218,7 @@ export class DisplayAnki {
                 displayTagsAndFlags,
                 cardFormats,
                 noteGuiMode,
+                viewNoteButtonAction,
                 screenshot: {format, quality},
                 downloadTimeout,
                 forceSync,
@@ -233,6 +240,7 @@ export class DisplayAnki {
         this._screenshotQuality = quality;
         this._scanLength = scanLength;
         this._noteGuiMode = noteGuiMode;
+        this._viewNoteButtonAction = viewNoteButtonAction;
         this._noteTags = [...tags];
         this._targetTags = [...targetTags];
         this._audioDownloadIdleTimeout = (Number.isFinite(downloadTimeout) && downloadTimeout > 0 ? downloadTimeout : null);
@@ -249,6 +257,10 @@ export class DisplayAnki {
         this._updateDictionaryEntryDetailsToken = null;
         this._dictionaryEntryDetails = null;
         this._hideErrorNotification(false);
+        if (this._notePreviewNotification !== null) {
+            this._notePreviewNotification.close(false);
+        }
+        this._releaseNotePreviewObjectUrls();
         this._eventListeners.removeAllEventListeners();
     }
 
@@ -1114,7 +1126,7 @@ export class DisplayAnki {
      * @returns {boolean} - True if additional info fetching is enabled, false otherwise.
      */
     _isAdditionalInfoEnabled() {
-        return this._displayTagsAndFlags !== 'never' || this._duplicateBehavior === 'overwrite';
+        return this._displayTagsAndFlags !== 'never' || this._duplicateBehavior === 'overwrite' || this._viewNoteButtonAction === 'browser-preview';
     }
 
     /**
@@ -1310,9 +1322,25 @@ export class DisplayAnki {
         const element = /** @type {HTMLElement} */ (e.currentTarget);
         e.preventDefault();
         if (e.shiftKey) {
-            this._showViewNotesMenu(element);
+            // Shift-click performs the secondary action (the action that is not the configured primary one)
+            this._performViewNoteAction(element, this._viewNoteButtonAction === 'browser-preview' ? 'anki-window' : 'browser-preview');
         } else {
-            void this._viewNotes(element);
+            this._performViewNoteAction(element, this._viewNoteButtonAction);
+        }
+    }
+
+    /**
+     * @param {HTMLElement} element
+     * @param {import('settings').AnkiViewNoteButtonAction} action
+     */
+    _performViewNoteAction(element, action) {
+        switch (action) {
+            case 'browser-preview':
+                void this._previewNotes(element);
+                break;
+            default:
+                void this._viewNotes(element);
+                break;
         }
     }
 
@@ -1440,6 +1468,340 @@ export class DisplayAnki {
     }
 
     /**
+     * Renders the contents of the already-added note(s) directly inside the popup, including
+     * images and audio, without switching to the Anki application.
+     * @param {HTMLElement} node
+     */
+    async _previewNotes(node) {
+        const noteIds = this._getNodeNoteIds(node);
+        if (noteIds.length === 0) { return; }
+        const noteInfos = this._findNoteInfosByIds(noteIds);
+        const progressIndicatorVisible = this._display.progressIndicatorVisible;
+        const overrideToken = progressIndicatorVisible.setOverride(true);
+        try {
+            const content = await this._buildNotePreviewContent(noteInfos);
+            this._showNotePreviewNotification(content);
+        } catch (e) {
+            this._showErrorNotification([toError(e)]);
+        } finally {
+            progressIndicatorVisible.clearOverride(overrideToken);
+        }
+    }
+
+    /**
+     * @param {number[]} noteIds
+     * @returns {import('anki').NoteInfo[]}
+     */
+    _findNoteInfosByIds(noteIds) {
+        /** @type {import('anki').NoteInfo[]} */
+        const results = [];
+        const details = this._dictionaryEntryDetails;
+        if (details === null) { return results; }
+        const idSet = new Set(noteIds);
+        const seen = new Set();
+        for (const entryDetails of details) {
+            for (const {noteInfos} of entryDetails.noteMap.values()) {
+                if (!Array.isArray(noteInfos)) { continue; }
+                for (const info of noteInfos) {
+                    if (info === null || !idSet.has(info.noteId) || seen.has(info.noteId)) { continue; }
+                    seen.add(info.noteId);
+                    results.push(info);
+                }
+            }
+        }
+        return results;
+    }
+
+    /**
+     * @param {import('anki').NoteInfo[]} noteInfos
+     * @returns {Promise<HTMLElement>}
+     */
+    async _buildNotePreviewContent(noteInfos) {
+        this._releaseNotePreviewObjectUrls();
+
+        // Pass 1: parse field values and collect the names of all referenced media files
+        /** @type {Set<string>} */
+        const fileNames = new Set();
+        /** @type {{fields: {name: string, body: HTMLElement, value: string}[]}[]} */
+        const notesData = [];
+        for (const noteInfo of noteInfos) {
+            if (noteInfo === null) { continue; }
+            /** @type {{name: string, body: HTMLElement, value: string}[]} */
+            const fields = [];
+            const sortedFields = Object.entries(noteInfo.fields).sort(([, a], [, b]) => a.order - b.order);
+            for (const [name, {value}] of sortedFields) {
+                if (typeof value !== 'string' || value.trim().length === 0) { continue; }
+                const body = new DOMParser().parseFromString(value, 'text/html').body;
+                this._collectFieldMediaFileNames(body, value, fileNames);
+                fields.push({name, body, value});
+            }
+            notesData.push({fields});
+        }
+
+        // Fetch the referenced media from Anki and convert it into object URLs
+        /** @type {Map<string, string>} */
+        const mediaMap = new Map();
+        if (fileNames.size > 0) {
+            const mediaFiles = await this._display.application.api.getAnkiNoteMedia([...fileNames]);
+            for (const {fileName, content} of mediaFiles) {
+                if (content === null) { continue; }
+                const url = this._createObjectUrlFromBase64(content, fileName);
+                if (url !== null) { mediaMap.set(fileName, url); }
+            }
+        }
+
+        // Pass 2: build the preview DOM
+        const container = document.createElement('div');
+        container.className = 'anki-note-preview';
+        let hasContent = false;
+        for (const {fields} of notesData) {
+            if (fields.length === 0) { continue; }
+            hasContent = true;
+            const noteElement = document.createElement('div');
+            noteElement.className = 'anki-note-preview-note';
+            for (const {name, body, value} of fields) {
+                const fieldElement = document.createElement('div');
+                fieldElement.className = 'anki-note-preview-field';
+                const nameElement = document.createElement('div');
+                nameElement.className = 'anki-note-preview-field-name';
+                nameElement.textContent = name;
+                const valueElement = document.createElement('div');
+                valueElement.className = 'anki-note-preview-field-value';
+                this._renderFieldValueInto(valueElement, body, value, mediaMap);
+                fieldElement.appendChild(nameElement);
+                fieldElement.appendChild(valueElement);
+                noteElement.appendChild(fieldElement);
+            }
+            container.appendChild(noteElement);
+        }
+        if (!hasContent) {
+            const emptyElement = document.createElement('div');
+            emptyElement.className = 'anki-note-preview-empty';
+            emptyElement.textContent = 'This note has no displayable content.';
+            container.appendChild(emptyElement);
+        }
+        return container;
+    }
+
+    /**
+     * @param {HTMLElement} body Parsed field-value document body.
+     * @param {string} value Raw field value.
+     * @param {Set<string>} fileNames Output set of referenced media file names.
+     */
+    _collectFieldMediaFileNames(body, value, fileNames) {
+        const soundPattern = /\[sound:(.*?)\]/g;
+        let match;
+        while ((match = soundPattern.exec(value)) !== null) {
+            const fileName = match[1].trim();
+            if (fileName.length > 0) { fileNames.add(fileName); }
+        }
+        for (const img of body.querySelectorAll('img')) {
+            const fileName = this._getMediaFileNameFromSrc(img.getAttribute('src'));
+            if (fileName !== null) { fileNames.add(fileName); }
+        }
+    }
+
+    /**
+     * @param {HTMLElement} target Element to render the field value into.
+     * @param {HTMLElement} body Parsed field-value document body.
+     * @param {string} _value Raw field value.
+     * @param {Map<string, string>} mediaMap Map of media file name to object URL.
+     */
+    _renderFieldValueInto(target, body, _value, mediaMap) {
+        this._sanitizePreviewNode(body);
+
+        for (const img of body.querySelectorAll('img')) {
+            const fileName = this._getMediaFileNameFromSrc(img.getAttribute('src'));
+            if (fileName === null) { continue; }
+            const url = mediaMap.get(fileName);
+            if (typeof url === 'string') {
+                img.setAttribute('src', url);
+                img.classList.add('anki-note-preview-image');
+            } else {
+                img.replaceWith(this._createMissingMediaPlaceholder(body.ownerDocument, `image: ${fileName}`));
+            }
+        }
+
+        this._replaceSoundTokens(body, mediaMap);
+
+        for (const child of body.childNodes) {
+            target.appendChild(document.importNode(child, true));
+        }
+    }
+
+    /**
+     * Replaces `[sound:file]` tokens in text nodes with audio players (or placeholders).
+     * @param {HTMLElement} root
+     * @param {Map<string, string>} mediaMap
+     */
+    _replaceSoundTokens(root, mediaMap) {
+        const doc = root.ownerDocument;
+        const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        /** @type {Text[]} */
+        const textNodes = [];
+        while (walker.nextNode()) {
+            textNodes.push(/** @type {Text} */ (walker.currentNode));
+        }
+        for (const textNode of textNodes) {
+            const text = textNode.nodeValue;
+            if (text === null || !text.includes('[sound:')) { continue; }
+            const soundPattern = /\[sound:(.*?)\]/g;
+            const fragment = doc.createDocumentFragment();
+            let lastIndex = 0;
+            let match;
+            while ((match = soundPattern.exec(text)) !== null) {
+                if (match.index > lastIndex) {
+                    fragment.appendChild(doc.createTextNode(text.slice(lastIndex, match.index)));
+                }
+                const fileName = match[1].trim();
+                const url = mediaMap.get(fileName);
+                if (typeof url === 'string') {
+                    const audio = doc.createElement('audio');
+                    audio.controls = true;
+                    audio.preload = 'metadata';
+                    audio.src = url;
+                    audio.className = 'anki-note-preview-audio';
+                    fragment.appendChild(audio);
+                } else {
+                    fragment.appendChild(this._createMissingMediaPlaceholder(doc, `audio: ${fileName}`));
+                }
+                lastIndex = soundPattern.lastIndex;
+            }
+            if (lastIndex < text.length) {
+                fragment.appendChild(doc.createTextNode(text.slice(lastIndex)));
+            }
+            textNode.parentNode?.replaceChild(fragment, textNode);
+        }
+    }
+
+    /**
+     * Removes potentially unsafe elements/attributes from parsed Anki field content.
+     * @param {HTMLElement} root
+     */
+    _sanitizePreviewNode(root) {
+        const disallowedTags = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'BASE', 'IFRAME', 'OBJECT', 'EMBED', 'TITLE']);
+        const urlAttributes = new Set(['href', 'src', 'xlink:href']);
+        for (const element of root.querySelectorAll('*')) {
+            if (disallowedTags.has(element.tagName)) {
+                element.remove();
+                continue;
+            }
+            for (const attrName of element.getAttributeNames()) {
+                const name = attrName.toLowerCase();
+                const attrValue = (element.getAttribute(attrName) ?? '').trim().toLowerCase();
+                const isEventHandler = name.startsWith('on');
+                const isJavascriptUrl = urlAttributes.has(name) && attrValue.startsWith('javascript:');
+                if (isEventHandler || isJavascriptUrl) {
+                    element.removeAttribute(attrName);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param {Document} doc
+     * @param {string} label
+     * @returns {HTMLElement}
+     */
+    _createMissingMediaPlaceholder(doc, label) {
+        const placeholder = doc.createElement('span');
+        placeholder.className = 'anki-note-preview-missing-media';
+        placeholder.textContent = `[${label}]`;
+        return placeholder;
+    }
+
+    /**
+     * @param {?string} src
+     * @returns {?string} The Anki media file name, or `null` if the source is external or empty.
+     */
+    _getMediaFileNameFromSrc(src) {
+        if (typeof src !== 'string' || src.length === 0) { return null; }
+        if (/^(?:https?:|data:|blob:)/i.test(src)) { return null; }
+        let name = src;
+        const slashIndex = name.lastIndexOf('/');
+        if (slashIndex >= 0) { name = name.slice(slashIndex + 1); }
+        try {
+            name = decodeURIComponent(name);
+        } catch (e) {
+            // Keep the raw name if it is not valid percent-encoding
+        }
+        name = name.trim();
+        return name.length > 0 ? name : null;
+    }
+
+    /**
+     * @param {string} base64 Base64-encoded file content.
+     * @param {string} fileName Used to infer the MIME type.
+     * @returns {?string} An object URL, or `null` if conversion failed.
+     */
+    _createObjectUrlFromBase64(base64, fileName) {
+        try {
+            const binary = atob(base64);
+            const length = binary.length;
+            const bytes = new Uint8Array(length);
+            for (let i = 0; i < length; ++i) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], {type: this._getMimeTypeFromFileName(fileName)});
+            const url = URL.createObjectURL(blob);
+            this._notePreviewObjectUrls.push(url);
+            return url;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * @param {string} fileName
+     * @returns {string}
+     */
+    _getMimeTypeFromFileName(fileName) {
+        const dotIndex = fileName.lastIndexOf('.');
+        const extension = dotIndex >= 0 ? fileName.slice(dotIndex + 1).toLowerCase() : '';
+        /** @type {Record<string, string>} */
+        const mimeTypes = {
+            apng: 'image/apng',
+            avif: 'image/avif',
+            bmp: 'image/bmp',
+            flac: 'audio/flac',
+            gif: 'image/gif',
+            jpeg: 'image/jpeg',
+            jpg: 'image/jpeg',
+            m4a: 'audio/mp4',
+            mp3: 'audio/mpeg',
+            mp4: 'video/mp4',
+            oga: 'audio/ogg',
+            ogg: 'audio/ogg',
+            opus: 'audio/ogg',
+            png: 'image/png',
+            svg: 'image/svg+xml',
+            wav: 'audio/wav',
+            webm: 'video/webm',
+            webp: 'image/webp',
+        };
+        return Object.prototype.hasOwnProperty.call(mimeTypes, extension) ? mimeTypes[extension] : 'application/octet-stream';
+    }
+
+    /**
+     * @param {HTMLElement} content
+     */
+    _showNotePreviewNotification(content) {
+        if (this._notePreviewNotification === null) {
+            this._notePreviewNotification = this._display.createNotification(true);
+        }
+        this._notePreviewNotification.setContent(content);
+        this._notePreviewNotification.open();
+    }
+
+    /** */
+    _releaseNotePreviewObjectUrls() {
+        for (const url of this._notePreviewObjectUrls) {
+            URL.revokeObjectURL(url);
+        }
+        this._notePreviewObjectUrls = [];
+    }
+
+    /**
      * @param {HTMLElement} node
      */
     _showViewNotesMenu(node) {
@@ -1510,7 +1872,7 @@ export class DisplayAnki {
         /** @type {HTMLButtonElement | null} */
         const nthButton = container.querySelector(`.action-button-container[data-card-format-index="${cardFormatIndex}"] .action-button[data-action=view-note]`);
         if (nthButton === null) { return; }
-        void this._viewNotes(nthButton);
+        this._performViewNoteAction(nthButton, this._viewNoteButtonAction);
     }
 
     /**

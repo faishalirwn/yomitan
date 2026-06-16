@@ -146,6 +146,14 @@ export class API {
     }
 
     /**
+     * @param {import('api').ApiParam<'getAnkiNoteMedia', 'fileNames'>} fileNames
+     * @returns {Promise<import('api').ApiReturn<'getAnkiNoteMedia'>>}
+     */
+    getAnkiNoteMedia(fileNames) {
+        return this._invoke('getAnkiNoteMedia', {fileNames});
+    }
+
+    /**
      * @param {import('api').ApiParam<'suspendAnkiCardsForNote', 'noteId'>} noteId
      * @returns {Promise<import('api').ApiReturn<'suspendAnkiCardsForNote'>>}
      */

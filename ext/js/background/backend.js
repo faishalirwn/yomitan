@@ -157,6 +157,7 @@ export class Backend {
             ['getAnkiNoteInfo',              this._onApiGetAnkiNoteInfo.bind(this)],
             ['injectAnkiNoteMedia',          this._onApiInjectAnkiNoteMedia.bind(this)],
             ['viewNotes',                    this._onApiViewNotes.bind(this)],
+            ['getAnkiNoteMedia',             this._onApiGetAnkiNoteMedia.bind(this)],
             ['suspendAnkiCardsForNote',      this._onApiSuspendAnkiCardsForNote.bind(this)],
             ['commandExec',                  this._onApiCommandExec.bind(this)],
             ['getTermAudioInfoList',         this._onApiGetTermAudioInfoList.bind(this)],
@@ -801,6 +802,23 @@ export class Backend {
         }
         await this._anki.guiBrowseNotes(noteIds);
         return 'browse';
+    }
+
+    /** @type {import('api').ApiHandler<'getAnkiNoteMedia'>} */
+    async _onApiGetAnkiNoteMedia({fileNames}) {
+        /** @type {import('api').AnkiNoteMediaFile[]} */
+        const results = [];
+        for (const fileName of fileNames) {
+            let content = null;
+            try {
+                content = await this._anki.retrieveMediaFile(fileName);
+            } catch (e) {
+                // Ignore individual media failures so the rest of the note can still be previewed
+                content = null;
+            }
+            results.push({fileName, content});
+        }
+        return results;
     }
 
     /** @type {import('api').ApiHandler<'suspendAnkiCardsForNote'>} */

@@ -1005,6 +1005,7 @@
                                     "displayTagsAndFlags",
                                     "targetTags",
                                     "noteGuiMode",
+                                    "viewNoteButtonAction",
                                     "apiKey",
                                     "downloadTimeout",
                                     "forceSync",
@@ -1171,6 +1172,11 @@
                                         "type": "string",
                                         "enum": ["browse", "edit"],
                                         "default": "browse"
+                                    },
+                                    "viewNoteButtonAction": {
+                                        "type": "string",
+                                        "enum": ["anki-window", "browser-preview"],
+                                        "default": "anki-window"
                                     },
                                     "apiKey": {
                                         "type": "string",

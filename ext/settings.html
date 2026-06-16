@@ -2128,6 +2128,35 @@
                 </p>
             </div>
         </div>
+        <div class="settings-item">
+            <div class="settings-item-inner">
+                <div class="settings-item-left">
+                    <div class="settings-item-label">View added note action</div>
+                    <div class="settings-item-description">
+                        What clicking the <em>View added note</em> button does.
+                        <a tabindex="0" class="more-toggle more-only" data-parent-distance="4">More&hellip;</a>
+                    </div>
+                </div>
+                <div class="settings-item-right">
+                    <select data-setting="anki.viewNoteButtonAction">
+                        <option value="anki-window">Open Anki window</option>
+                        <option value="browser-preview">Preview in browser</option>
+                    </select>
+                </div>
+            </div>
+            <div class="settings-item-children more" hidden>
+                <p>
+                    Selects the primary action performed when clicking the <em>View added note</em> button.
+                    <em>Open Anki window</em> opens the note inside Anki using the <em>Note viewer window</em> setting above.
+                    <em>Preview in browser</em> instead shows the note's contents (including images and audio) directly
+                    inside the popup, without switching to Anki. The other action remains available by holding
+                    <em>Shift</em> while clicking the button.
+                </p>
+                <p class="margin-above">
+                    <a tabindex="0" class="more-toggle" data-parent-distance="3">Less&hellip;</a>
+                </p>
+            </div>
+        </div>
         <div class="settings-item advanced-only">
             <div class="settings-item-inner">
                 <div class="settings-item-left">

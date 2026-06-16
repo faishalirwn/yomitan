@@ -289,6 +289,27 @@ export class AnkiConnect {
     }
 
     /**
+     * Retrieves the base64-encoded content of a file stored inside Anki's media folder.
+     * @param {string} fileName The name of the file.
+     * @returns {Promise<?string>} The base64-encoded content of the file, or `null` if the file does not exist.
+     * @throws {Error} An error is thrown if this object is not enabled.
+     */
+    async retrieveMediaFile(fileName) {
+        if (!this._enabled) {
+            throw new Error('AnkiConnect not enabled');
+        }
+        await this._checkVersion();
+        const result = await this._invoke('retrieveMediaFile', {filename: fileName});
+        if (result === false) {
+            return null;
+        }
+        if (typeof result !== 'string') {
+            throw this._createUnexpectedResultError('string|false', result);
+        }
+        return result;
+    }
+
+    /**
      * Finds notes matching a query.
      * @param {string} query Searches for notes matching a query.
      * @returns {Promise<import('anki').NoteId[]>} An array of note IDs.
