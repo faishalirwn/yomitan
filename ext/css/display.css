@@ -1891,14 +1891,37 @@ button.footer-notification-close-button {
     row-gap: 0.75em;
     white-space: normal;
 }
+.anki-note-preview-tabs {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 0.25em;
+    padding-bottom: 0.5em;
+    border-bottom: var(--thin-border-size) solid var(--medium-border-color);
+}
+.anki-note-preview-tab {
+    cursor: pointer;
+    padding: 0.2em 0.6em;
+    border: var(--thin-border-size) solid var(--medium-border-color);
+    border-radius: 0.25em;
+    background-color: transparent;
+    color: inherit;
+    font-size: 0.9em;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.anki-note-preview-tab:hover {
+    background-color: var(--notification-background-color-light);
+}
+.anki-note-preview-tab-active {
+    background-color: var(--notification-background-color-light);
+    font-weight: bold;
+}
 .anki-note-preview-note {
     display: flex;
     flex-flow: column nowrap;
     row-gap: 0.5em;
-}
-.anki-note-preview-note:not(:last-child) {
-    padding-bottom: 0.75em;
-    border-bottom: var(--thin-border-size) solid var(--medium-border-color);
 }
 .anki-note-preview-field {
     display: flex;

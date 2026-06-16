@@ -1522,7 +1522,7 @@ export class DisplayAnki {
         // Pass 1: parse field values and collect the names of all referenced media files
         /** @type {Set<string>} */
         const fileNames = new Set();
-        /** @type {{fields: {name: string, body: HTMLElement, value: string}[]}[]} */
+        /** @type {{deckName: string, fields: {name: string, body: HTMLElement, value: string}[]}[]} */
         const notesData = [];
         for (const noteInfo of noteInfos) {
             if (noteInfo === null) { continue; }
@@ -1535,7 +1535,7 @@ export class DisplayAnki {
                 this._collectFieldMediaFileNames(body, value, fileNames);
                 fields.push({name, body, value});
             }
-            notesData.push({fields});
+            notesData.push({deckName: this._getNoteDeckName(noteInfo), fields});
         }
 
         // Fetch the referenced media from Anki and convert it into object URLs
@@ -1553,10 +1553,35 @@ export class DisplayAnki {
         // Pass 2: build the preview DOM
         const container = document.createElement('div');
         container.className = 'anki-note-preview';
-        let hasContent = false;
-        for (const {fields} of notesData) {
-            if (fields.length === 0) { continue; }
-            hasContent = true;
+
+        const renderableNotes = notesData.filter((note) => note.fields.length > 0);
+        if (renderableNotes.length === 0) {
+            const emptyElement = document.createElement('div');
+            emptyElement.className = 'anki-note-preview-empty';
+            emptyElement.textContent = 'This note has no displayable content.';
+            container.appendChild(emptyElement);
+            return container;
+        }
+
+        // When the word exists in more than one note (e.g. across decks), show a tab per note
+        // labelled with its deck name so the relevant deck can be reached without scrolling.
+        const showTabs = renderableNotes.length > 1;
+        const notesContainer = document.createElement('div');
+        notesContainer.className = 'anki-note-preview-notes';
+
+        /** @type {HTMLButtonElement[]} */
+        const tabButtons = [];
+        /** @type {HTMLElement[]} */
+        const noteElements = [];
+
+        let tabBar = null;
+        if (showTabs) {
+            tabBar = document.createElement('div');
+            tabBar.className = 'anki-note-preview-tabs';
+        }
+
+        for (let i = 0; i < renderableNotes.length; ++i) {
+            const {deckName, fields} = renderableNotes[i];
             const noteElement = document.createElement('div');
             noteElement.className = 'anki-note-preview-note';
             for (const {name, body, value} of fields) {
@@ -1572,15 +1597,58 @@ export class DisplayAnki {
                 fieldElement.appendChild(valueElement);
                 noteElement.appendChild(fieldElement);
             }
-            container.appendChild(noteElement);
+            noteElements.push(noteElement);
+            notesContainer.appendChild(noteElement);
+
+            if (tabBar !== null) {
+                const tabButton = document.createElement('button');
+                tabButton.type = 'button';
+                tabButton.className = 'anki-note-preview-tab';
+                const label = deckName.length > 0 ? deckName : `Note ${i + 1}`;
+                tabButton.textContent = label;
+                tabButton.title = label;
+                this._eventListeners.addEventListener(tabButton, 'click', () => {
+                    this._setActiveNotePreviewTab(tabButtons, noteElements, i);
+                });
+                tabButtons.push(tabButton);
+                tabBar.appendChild(tabButton);
+            }
         }
-        if (!hasContent) {
-            const emptyElement = document.createElement('div');
-            emptyElement.className = 'anki-note-preview-empty';
-            emptyElement.textContent = 'This note has no displayable content.';
-            container.appendChild(emptyElement);
+
+        if (tabBar !== null) {
+            container.appendChild(tabBar);
+            this._setActiveNotePreviewTab(tabButtons, noteElements, 0);
         }
+        container.appendChild(notesContainer);
         return container;
+    }
+
+    /**
+     * @param {HTMLButtonElement[]} tabButtons
+     * @param {HTMLElement[]} noteElements
+     * @param {number} activeIndex
+     */
+    _setActiveNotePreviewTab(tabButtons, noteElements, activeIndex) {
+        for (let i = 0; i < noteElements.length; ++i) {
+            const active = i === activeIndex;
+            noteElements[i].hidden = !active;
+            if (i < tabButtons.length) {
+                tabButtons[i].classList.toggle('anki-note-preview-tab-active', active);
+            }
+        }
+    }
+
+    /**
+     * @param {import('anki').NoteInfo} noteInfo
+     * @returns {string}
+     */
+    _getNoteDeckName(noteInfo) {
+        for (const cardInfo of noteInfo.cardsInfo) {
+            if (typeof cardInfo.deckName === 'string' && cardInfo.deckName.length > 0) {
+                return cardInfo.deckName;
+            }
+        }
+        return '';
     }
 
     /**

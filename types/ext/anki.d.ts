@@ -70,6 +70,7 @@ export type CardInfo = {
     cardId: CardId;
     flags: number;
     cardState: number;
+    deckName: string;
 };
 
 export type ApiReflectResult = {
