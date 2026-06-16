@@ -1617,6 +1617,11 @@ export class DisplayAnki {
             if (typeof url === 'string') {
                 img.setAttribute('src', url);
                 img.classList.add('anki-note-preview-image');
+                const figure = body.ownerDocument.createElement('div');
+                figure.className = 'anki-note-preview-media';
+                img.replaceWith(figure);
+                figure.appendChild(img);
+                figure.appendChild(this._createMediaName(body.ownerDocument, fileName));
             } else {
                 img.replaceWith(this._createMissingMediaPlaceholder(body.ownerDocument, `image: ${fileName}`));
             }
@@ -1661,7 +1666,11 @@ export class DisplayAnki {
                     audio.preload = 'metadata';
                     audio.src = url;
                     audio.className = 'anki-note-preview-audio';
-                    fragment.appendChild(audio);
+                    const figure = doc.createElement('div');
+                    figure.className = 'anki-note-preview-media';
+                    figure.appendChild(audio);
+                    figure.appendChild(this._createMediaName(doc, fileName));
+                    fragment.appendChild(figure);
                 } else {
                     fragment.appendChild(this._createMissingMediaPlaceholder(doc, `audio: ${fileName}`));
                 }
@@ -1708,6 +1717,19 @@ export class DisplayAnki {
         placeholder.className = 'anki-note-preview-missing-media';
         placeholder.textContent = `[${label}]`;
         return placeholder;
+    }
+
+    /**
+     * @param {Document} doc
+     * @param {string} fileName
+     * @returns {HTMLElement}
+     */
+    _createMediaName(doc, fileName) {
+        const name = doc.createElement('div');
+        name.className = 'anki-note-preview-media-name';
+        name.textContent = fileName;
+        name.title = fileName;
+        return name;
     }
 
     /**
