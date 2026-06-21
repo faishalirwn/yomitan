@@ -1584,6 +1584,14 @@ export class DisplayAnki {
             const {deckName, fields} = renderableNotes[i];
             const noteElement = document.createElement('div');
             noteElement.className = 'anki-note-preview-note';
+            // Without tabs there is no other indication of which deck the note belongs to
+            if (!showTabs && deckName.length > 0) {
+                const deckElement = document.createElement('div');
+                deckElement.className = 'anki-note-preview-deck';
+                deckElement.textContent = deckName;
+                deckElement.title = deckName;
+                noteElement.appendChild(deckElement);
+            }
             for (const {name, body, value} of fields) {
                 const fieldElement = document.createElement('div');
                 fieldElement.className = 'anki-note-preview-field';

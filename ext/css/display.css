@@ -1926,6 +1926,19 @@ button.footer-notification-close-button {
 .anki-note-preview-note[hidden] {
     display: none;
 }
+.anki-note-preview-deck {
+    font-size: 0.9em;
+    font-weight: bold;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    padding-bottom: 0.5em;
+    border-bottom: var(--thin-border-size) solid var(--medium-border-color);
+}
+.anki-note-preview-deck::before {
+    content: 'Deck: ';
+    font-weight: normal;
+    opacity: 0.6;
+}
 .anki-note-preview-field {
     display: flex;
     flex-flow: column nowrap;
@@ -1935,8 +1948,6 @@ button.footer-notification-close-button {
     font-size: 0.85em;
     font-weight: bold;
     opacity: 0.7;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
 }
 .anki-note-preview-field-value {
     word-break: break-word;
